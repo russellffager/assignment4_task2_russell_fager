@@ -5,23 +5,154 @@ date: "11/5/2021"
 output: html_document
 ---
 
-## Overview
+### 1. Overview
 
 This report explores the counts and sizes of juvenile snowshoe hares recorded from 1998 - 2012 at the Bonanza Creek LTER, which is part of the US Long Term Ecological Research Network.
 
 Data citation: Kielland, K., F.S. Chapin, R.W. Ruess, and Bonanza Creek LTER. 2017. Snowshoe hare physical data in Bonanza Creek Experimental Forest: 1999-Present ver 22. Environmental Data Initiative. https://doi.org/10.6073/pasta/03dce4856d79b91557d8e6ce2cbcdc14
 
 
-```{r setup, include= FALSE, message= FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(here)
-library(janitor)
-library(lubridate)
+library(effsize)
+library(broom)
+library(palmerpenguins)
+library(ggbeeswarm)
 library(kableExtra)
+library(lubridate)
 ```
 
 ```{r}
 bonanza_hares <- read_csv(here("data", "bonanza_hares.csv"))
+
 ```
 
+### 2. Juvenile hare initial investigation - Annual juvenile hare trap counts.
+
+```{r}
+juvenile_bonanza_hares <- bonanza_hares %>% 
+  mutate(date_new = mdy(date)) %>% 
+  mutate(year = year(date_new)) %>% 
+  filter(age == "j") %>% 
+  group_by(year) %>% 
+  summarize(juvenile_count = n())
+
+```
+
+```{r}
+ggplot(data = juvenile_bonanza_hares, aes(x = year, y = juvenile_count)) +
+  geom_col() 
+```
+**Figure 1 shows...**
+
+### Stats on juvenile hare trap counts
+
+```{r}
+juvenile_bonanza_hares_stats <- juvenile_bonanza_hares %>% 
+  summarize(
+    n = n(),
+    mean = round(mean(juvenile_count, na.rm = TRUE),2),
+    sd = round(sd(juvenile_count, na.rm = TRUE),2),
+    max = round(max(juvenile_count, na.rm = TRUE),2),
+    min = min(juvenile_count,na.rm = TRUE),
+    median = median(juvenile_count,na.rm = TRUE))
+
+juvenile_bonanza_hares_stats
+  
+```
+### Visualize juvenile hare weights
+
+
+```{r}
+
+juvenile_bonanza_hares_w <- bonanza_hares %>% 
+  mutate(date_new = mdy(date)) %>% 
+  mutate(year = year(date_new)) %>% 
+  filter(!is.na(age == "j"))
+
+  
+
+```
+
+
+```{r}
+ggplot(data = juvenile_bonanza_hares_w, aes(x = weight, color = grid), na.rm = TRUE) +
+  geom_histogram()+
+  facet_wrap(~ sex)+
+  labs (x = "Weight", 
+        y = "Count",
+        title = " (FAGER)")
+  
+```
+
+```{r}
+juvenile_bonanza_table <- juvenile_bonanza_hares_w %>% 
+  group_by(sex) %>% 
+  summarize(
+    mean = round(mean(weight, na.rm = TRUE),2),
+    sd = round(sd(weight, na.rm = TRUE),2),
+    n = n()
+  )
+
+juvenile_bonanza_table %>% 
+kable(col.names = c("Sex", "Mean Weight", "Standard deviation", "Sample size")) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+```{r}
+ggplot(data = juvenile_bonanza_hares_w, aes(x = weight), na.rm = TRUE) +
+  geom_histogram(bins = 15) +
+  facet_wrap(~sex)
+
+ggplot(data = juvenile_bonanza_hares_w, aes(sample = weight), na.rm = TRUE) +
+  geom_qq() +
+  facet_wrap(~sex)
+```
+
+
+### 4. Split df into groups, then pull sample vectors
+```{r}
+male_sample <- juvenile_bonanza_hares_w %>% 
+  filter(sex == "m") %>% 
+  pull(weight)
+
+female_sample <- juvenile_bonanza_hares_w %>% 
+  filter(sex == "f") %>% 
+  pull(weight)
+```
+
+### 5. Then run a two-sample t-test with those vectors as the inputs
+
+```{r}
+hare_t <- t.test(male_sample, female_sample, na.rm = TRUE)
+
+hare_t
+
+```
+
+### 6. Cohen's D
+
+```{r}
+hare_cohen <- cohen.d(male_sample, female_sample, na.rm = TRUE)
+
+hare_cohen
+```
+### Relationship between juvenile weight & hind foot length.
+
+
+```{r}
+ggplot(data = juvenile_bonanza_hares_w, aes(x = weight, y = hindft),na.rm = TRUE) +
+  geom_point(aes(color = sex, pch = sex), size = 2) +
+  scale_color_manual(values = c("goldenrod2","cyan4","coral"), 
+                     name = "Hare Sex") +
+  scale_shape_manual(values = c(16,17,18), 
+                     name = "Hare Sex") +
+  geom_smooth(method = "lm", se = FALSE, color = "gray30") +
+  theme_minimal() +
+  labs(x = "\nWeight (g)",
+       y = "Hind Foot Length (mm)\n") 
+  
+```
+**Figure 3.** Relationship between Hind Foot Length (mm) and Weight (g) for the three penguin species. Points indicate individual penguin measurements (Female = gold circles; Male = teal triangles). Linear model summary: 
